@@ -177,18 +177,21 @@ test_loader = DataLoader(test_dataset, batch_size=config['batch_size'], shuffle=
 
 def trainer(train_loader, valid_loader, model, config, device):
     criterion = nn.MSELoss(reduction='mean')  # Define your loss function, do not modify this.
+    # 'none': no reduction will be applied.
+    # 'mean': the sum of the output will be divided by the number of elements in the output.
+    # 'sum': the output will be summed.
 
     # Define your optimization algorithm.
     # TODO: Please check https://pytorch.org/docs/stable/optim.html to get more available algorithms.
     # TODO: L2 regularization (optimizer(weight decay...) or implement by your self).
     optimizer = torch.optim.SGD(model.parameters(), lr=config['learning_rate'], momentum=0.9)
-
-    writer = SummaryWriter()  # Writer of tensoboard.
+    # 使用SGD会把数据拆分后再分批不断放入 NN 中计算.
+    writer = SummaryWriter()  # Writer of tensoboard.将loss可视化
 
     if not os.path.isdir('./models'):
         os.mkdir('./models')  # Create directory of saving models.
 
-    n_epochs, best_loss, step, early_stop_count = config['n_epochs'], math.inf, 0, 0
+    n_epochs, best_loss, step, early_stop_count = config['n_epochs'], math.inf, 0, 0  # math.inf：无穷大正浮点数
 
     for epoch in range(n_epochs):
         model.train()  # Set your model to train mode.
@@ -205,7 +208,7 @@ def trainer(train_loader, valid_loader, model, config, device):
             loss.backward()  # Compute gradient(backpropagation).
             optimizer.step()  # Update parameters.
             step += 1
-            loss_record.append(loss.detach().item())
+            loss_record.append(loss.detach().item()) # 阻断 反向传播并获得标量值
 
             # Display current epoch number and loss on tqdm progress bar.
             train_pbar.set_description(f'Epoch [{epoch + 1}/{n_epochs}]')
@@ -240,6 +243,5 @@ def trainer(train_loader, valid_loader, model, config, device):
             print('\nModel is not improving, so we halt the training session.')
             return
 
-
-model = My_Model(input_dim=x_train.shape[1]).to(device)  # put your model and data on the same computation device.
-trainer(train_loader, valid_loader, model, config, device)
+# model = My_Model(input_dim=x_train.shape[1]).to(device)  # put your model and data on the same computation device.
+# trainer(train_loader, valid_loader, model, config, device)
