@@ -1,6 +1,4 @@
-import numpy as np
 import torch
-from torch import tensor
 
 # data = [[1, 2], [3, 4]]
 # x_data = torch.tensor(data)  # 列表转换为tensor
@@ -22,6 +20,7 @@ from torch import tensor
 #         #out[1][0] = input[1][ index[1][0] ] = input[1][0] = 3
 #
 #         #out[1][1] = input[1][ index[1][1] ] = input[1][1] = 4
+
 # Numerical Operations
 import math
 import numpy as np
@@ -41,6 +40,8 @@ from torch.utils.data import Dataset, DataLoader, random_split
 
 # For plotting learning curve
 from torch.utils.tensorboard import SummaryWriter
+
+import matplotlib.pyplot as plt
 
 
 def same_seed(seed):
@@ -121,11 +122,12 @@ class My_Model(nn.Module):
 
 def select_feat(train_data, valid_data, test_data, select_all=True):
     """Selects useful features to perform regression"""
-    y_train, y_valid = train_data[:, -1], valid_data[:, -1]
-    raw_x_train, raw_x_valid, raw_x_test = train_data[:, :-1], valid_data[:, :-1], test_data
+    y_train, y_valid = train_data[:, -1], valid_data[:, -1]  # 获得最后一列数据
+    raw_x_train, raw_x_valid, raw_x_test = train_data[:, :-1], valid_data[:, :-1], test_data  # 切割数据集，选取117个特征
 
     if select_all:
         feat_idx = list(range(raw_x_train.shape[1]))
+
     else:
         feat_idx = [0, 1, 2, 3, 4]  # TODO: Select suitable feature columns.
 
@@ -150,7 +152,8 @@ same_seed(config['seed'])
 
 # train_data size: 2699 x 118 (id + 37 states + 16 features x 5 days)
 # test_data size: 1078 x 117 (without last day's positive rate)
-train_data, test_data = pd.read_csv('./covid.train.csv').values, pd.read_csv('./covid.test.csv').values
+train_data, test_data = pd.read_csv('./covid.train.csv').values, pd.read_csv(
+    './covid.test.csv').values  # 读取训练和测试数据shape为(2699, 118)
 train_data, valid_data = train_valid_split(train_data, config['valid_ratio'], config['seed'])
 
 # Print out the data size.
@@ -160,14 +163,18 @@ test_data size: {test_data.shape}""")
 
 # Select features
 x_train, x_valid, x_test, y_train, y_valid = select_feat(train_data, valid_data, test_data, config['select_all'])
-
+print(f"""y_train:{y_train.shape}
+y_valid:{y_valid.shape}
+raw_x_train:{x_train.shape}
+raw_x_valid:{x_valid.shape}
+raw_x_test:{x_test.shape}
+ """)
 # Print out the number of features.
 print(f'number of features: {x_train.shape[1]}')
 
 train_dataset, valid_dataset, test_dataset = COVID19Dataset(x_train, y_train), \
                                              COVID19Dataset(x_valid, y_valid), \
                                              COVID19Dataset(x_test)
-
 # Pytorch data loader loads pytorch dataset into batches.shuffle：训练完打乱数据集
 # 将Dataset塞入Dataloader后进行遍历，可以得到一个batch_size长度的数据
 train_loader = DataLoader(train_dataset, batch_size=config['batch_size'], shuffle=True, pin_memory=True)
@@ -185,7 +192,7 @@ def trainer(train_loader, valid_loader, model, config, device):
     # TODO: Please check https://pytorch.org/docs/stable/optim.html to get more available algorithms.
     # TODO: L2 regularization (optimizer(weight decay...) or implement by your self).
     optimizer = torch.optim.SGD(model.parameters(), lr=config['learning_rate'], momentum=0.9)
-    # 使用SGD会把数据拆分后再分批不断放入 NN 中计算.
+    # 使用SGD会把数据拆分后再分批不断放入 NN 中计算,随机梯度优化算法。
     writer = SummaryWriter()  # Writer of tensoboard.将loss可视化
 
     if not os.path.isdir('./models'):
@@ -208,7 +215,7 @@ def trainer(train_loader, valid_loader, model, config, device):
             loss.backward()  # Compute gradient(backpropagation).
             optimizer.step()  # Update parameters.
             step += 1
-            loss_record.append(loss.detach().item()) # 阻断 反向传播并获得标量值
+            loss_record.append(loss.detach().item())  # 阻断 反向传播并获得标量值
 
             # Display current epoch number and loss on tqdm progress bar.
             train_pbar.set_description(f'Epoch [{epoch + 1}/{n_epochs}]')
@@ -224,12 +231,11 @@ def trainer(train_loader, valid_loader, model, config, device):
             with torch.no_grad():
                 pred = model(x)
                 loss = criterion(pred, y)
-
             loss_record.append(loss.item())
 
         mean_valid_loss = sum(loss_record) / len(loss_record)
         print(f'Epoch [{epoch + 1}/{n_epochs}]: Train loss: {mean_train_loss:.4f}, Valid loss: {mean_valid_loss:.4f}')
-        writer.add_scalar('Loss/valid', mean_valid_loss, step)
+        writer.add_scalar('Loss/valid', mean_valid_loss, step)  # tensorboard --logdir "./runs"
 
         if mean_valid_loss < best_loss:
             best_loss = mean_valid_loss
@@ -243,5 +249,20 @@ def trainer(train_loader, valid_loader, model, config, device):
             print('\nModel is not improving, so we halt the training session.')
             return
 
+
 # model = My_Model(input_dim=x_train.shape[1]).to(device)  # put your model and data on the same computation device.
 # trainer(train_loader, valid_loader, model, config, device)
+
+def save_pred(preds, file):
+    ''' Save predictions to specified file '''
+    with open(file, 'w') as fp:
+        writer = csv.writer(fp)
+        writer.writerow(['id', 'tested_positive'])
+        for i, p in enumerate(preds):
+            writer.writerow([i, p])
+
+
+model = My_Model(input_dim=x_train.shape[1]).to(device)
+model.load_state_dict(torch.load(config['save_path']))
+preds = predict(test_loader, model, device)
+save_pred(preds, 'pred.csv')
