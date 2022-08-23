@@ -109,6 +109,8 @@ class My_Model(nn.Module):
         self.layers = nn.Sequential(
             nn.Linear(input_dim, 16),  # （输入维度，输出）
             nn.ReLU(),
+            # nn.Linear(32, 16),
+            # nn.ReLU(),
             nn.Linear(16, 8),
             nn.ReLU(),
             nn.Linear(8, 1)
@@ -139,9 +141,9 @@ config = {
     'seed': 5201314,  # Your seed number, you can pick your lucky number. :)
     'select_all': True,  # Whether to use all features.
     'valid_ratio': 0.2,  # validation_size = train_size * valid_ratio
-    'n_epochs': 3000,  # Number of epochs.
+    'n_epochs': 5000,  # Number of epochs.
     'batch_size': 256,
-    'learning_rate': 1e-5,
+    'learning_rate': 1e-6,
     'early_stop': 400,  # If model has not improved for this many consecutive epochs, stop training.
     'save_path': './models/model.ckpt'  # Your model will be saved here.
 }
@@ -192,6 +194,8 @@ def trainer(train_loader, valid_loader, model, config, device):
     # TODO: Please check https://pytorch.org/docs/stable/optim.html to get more available algorithms.
     # TODO: L2 regularization (optimizer(weight decay...) or implement by your self).
     optimizer = torch.optim.SGD(model.parameters(), lr=config['learning_rate'], momentum=0.9)
+    # optimizer = torch.optim.Adam(model.parameters(), lr=config['learning_rate'])
+    # optimizer = torch.optim.Adagrad(model.parameters(), lr=config['learning_rate'])
     # 使用SGD会把数据拆分后再分批不断放入 NN 中计算,随机梯度优化算法。
     writer = SummaryWriter()  # Writer of tensoboard.将loss可视化
 
@@ -253,6 +257,7 @@ def trainer(train_loader, valid_loader, model, config, device):
 # model = My_Model(input_dim=x_train.shape[1]).to(device)  # put your model and data on the same computation device.
 # trainer(train_loader, valid_loader, model, config, device)
 
+
 def save_pred(preds, file):
     ''' Save predictions to specified file '''
     with open(file, 'w') as fp:
@@ -261,8 +266,7 @@ def save_pred(preds, file):
         for i, p in enumerate(preds):
             writer.writerow([i, p])
 
-
 model = My_Model(input_dim=x_train.shape[1]).to(device)
 model.load_state_dict(torch.load(config['save_path']))
 preds = predict(test_loader, model, device)
-save_pred(preds, 'pred.csv')
+save_pred(preds, 'predSDG_3.csv')
